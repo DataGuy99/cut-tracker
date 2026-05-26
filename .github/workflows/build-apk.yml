@@ -15,47 +15,42 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - name: Build Debug APK
+      - name: Generate wrapper and build
         working-directory: android
-        run: gradle assembleDebug --stacktrace 2>&1 | tee build-output.log
-      - name: Find APK
-        id: apk
         run: |
-          echo "=== Searching everywhere ==="
-          find . -name "*.apk" -type f 2>/dev/null || true
-          find . -path "*/build/outputs/*" -type f 2>/dev/null || true
-          echo "=== Build outputs dir ==="
-          ls -laR android/app/build/outputs/ 2>/dev/null || echo "no outputs dir"
+          gradle wrapper --gradle-version 8.11.1
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace 2>&1 | tee build-output.log
+      - name: Find and report APK
+        run: |
+          echo "=== All APKs ===" > apk-report.txt
+          find . -name "*.apk" -type f >> apk-report.txt 2>&1
+          echo "=== Build outputs ===" >> apk-report.txt
+          find . -path "*/outputs/*" -type f >> apk-report.txt 2>&1
+          echo "=== Home gradle ===" >> apk-report.txt
+          find ~/.gradle -name "*.apk" -type f >> apk-report.txt 2>&1 || true
+          cat apk-report.txt
           APK=$(find . -name "*.apk" -type f | head -1)
-          if [ -n "$APK" ]; then
-            echo "path=$APK" >> $GITHUB_OUTPUT
-            echo "Found APK: $APK"
-          else
-            echo "NO APK FOUND"
-            echo "=== Full build dir listing ==="
-            find android/app/build -type f 2>/dev/null | head -50 || echo "no build dir"
+          if [ -z "$APK" ]; then
+            APK=$(find ~/.gradle -name "*.apk" -type f | head -1)
           fi
-      - name: Upload APK as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: |
-            android/app/build/outputs/apk/**/*.apk
-            android/app/build/outputs/**/*.apk
-          if-no-files-found: warn
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: android/build-output.log
-          if-no-files-found: warn
+          echo "SELECTED: $APK" >> apk-report.txt
+          if [ -n "$APK" ]; then
+            cp "$APK" ./cut-tracker.apk
+            echo "apk_found=true" >> $GITHUB_OUTPUT
+          fi
+          # Commit report so Claude can read it
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add apk-report.txt
+          git commit -m "APK build report" || true
+          git push || true
       - name: Create Release
-        if: steps.apk.outputs.path != ''
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0-${{ github.run_number }}
           name: Cut Tracker v1.0 build ${{ github.run_number }}
-          files: ${{ steps.apk.outputs.path }}
+          files: cut-tracker.apk
           generate_release_notes: true
+          fail_on_unmatched_files: false
