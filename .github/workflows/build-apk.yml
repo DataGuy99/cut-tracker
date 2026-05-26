@@ -15,25 +15,17 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - name: Diagnostics
-        working-directory: android
-        run: |
-          echo "=== PWD ==="
-          pwd
-          echo "=== LS ==="
-          ls -la
-          echo "=== ANDROID_HOME ==="
-          echo $ANDROID_HOME
-          echo "=== SDK ==="
-          ls $ANDROID_HOME/platforms/ 2>/dev/null || echo "no platforms"
-          echo "=== JAVA ==="
-          java -version
-          echo "=== GRADLE ==="
-          gradle --version
       - name: Build Debug APK
         working-directory: android
         run: |
           gradle assembleDebug --stacktrace 2>&1 | tee build-output.log
+      - name: Find APK
+        id: apk
+        run: |
+          APK=$(find android -name "*.apk" -type f | head -1)
+          echo "Found: $APK"
+          ls -la "$APK"
+          echo "path=$APK" >> $GITHUB_OUTPUT
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -47,5 +39,5 @@ jobs:
         with:
           tag_name: v1.0-${{ github.run_number }}
           name: Cut Tracker v1.0 build ${{ github.run_number }}
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ steps.apk.outputs.path }}
           generate_release_notes: true
