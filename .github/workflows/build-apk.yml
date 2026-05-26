@@ -14,31 +14,34 @@ jobs:
           distribution: 'temurin'
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
       - uses: gradle/actions/setup-gradle@v4
       - name: Generate wrapper
         working-directory: android
         run: |
           gradle wrapper --gradle-version 8.9
           chmod +x gradlew
-      - name: Build Debug APK
+      - name: Build
         working-directory: android
         run: |
-          ./gradlew :app:assembleDebug --info 2>&1 | tee build-output.log
-          echo "EXIT CODE: $?"
-      - name: Find APK and release
+          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
+          echo "EXIT: $?" >> build-output.log
+      - name: Commit build log
+        if: always()
         run: |
-          echo "=== Searching ===" | tee apk-report.txt
-          find . -name "*.apk" -type f | tee -a apk-report.txt
-          APK=$(find . -name "*.apk" -type f | head -1)
-          echo "SELECTED: $APK" | tee -a apk-report.txt
+          # Always commit the build log so we can read it
+          cp android/build-output.log . 2>/dev/null || echo "no log" > build-output.log
+          find . -name "*.apk" -type f >> build-output.log 2>&1
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add apk-report.txt
-          git commit -m "build report" || true
+          git add build-output.log -f
+          git commit -m "build log" || true
           git push || true
-          if [ -n "$APK" ]; then
-            cp "$APK" ./cut-tracker.apk
-          fi
+      - name: Release
+        run: |
+          APK=$(find . -name "*.apk" -type f | head -1)
+          [ -n "$APK" ] && cp "$APK" ./cut-tracker.apk || exit 0
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v2
