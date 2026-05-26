@@ -1,5 +1,2 @@
-=== All APKs ===
-=== Build outputs ===
-./android/app/build/outputs/logs/manifest-merger-debug-report.txt
-=== Home gradle ===
+=== Searching ===
 SELECTED: 
