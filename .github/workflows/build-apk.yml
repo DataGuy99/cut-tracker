@@ -15,36 +15,30 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - name: Generate wrapper and build
+      - name: Generate wrapper
         working-directory: android
         run: |
-          gradle wrapper --gradle-version 8.11.1
+          gradle wrapper --gradle-version 8.9
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee build-output.log
-      - name: Find and report APK
+      - name: Build Debug APK
+        working-directory: android
         run: |
-          echo "=== All APKs ===" > apk-report.txt
-          find . -name "*.apk" -type f >> apk-report.txt 2>&1
-          echo "=== Build outputs ===" >> apk-report.txt
-          find . -path "*/outputs/*" -type f >> apk-report.txt 2>&1
-          echo "=== Home gradle ===" >> apk-report.txt
-          find ~/.gradle -name "*.apk" -type f >> apk-report.txt 2>&1 || true
-          cat apk-report.txt
+          ./gradlew :app:assembleDebug --info 2>&1 | tee build-output.log
+          echo "EXIT CODE: $?"
+      - name: Find APK and release
+        run: |
+          echo "=== Searching ===" | tee apk-report.txt
+          find . -name "*.apk" -type f | tee -a apk-report.txt
           APK=$(find . -name "*.apk" -type f | head -1)
-          if [ -z "$APK" ]; then
-            APK=$(find ~/.gradle -name "*.apk" -type f | head -1)
-          fi
-          echo "SELECTED: $APK" >> apk-report.txt
-          if [ -n "$APK" ]; then
-            cp "$APK" ./cut-tracker.apk
-            echo "apk_found=true" >> $GITHUB_OUTPUT
-          fi
-          # Commit report so Claude can read it
+          echo "SELECTED: $APK" | tee -a apk-report.txt
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add apk-report.txt
-          git commit -m "APK build report" || true
+          git commit -m "build report" || true
           git push || true
+          if [ -n "$APK" ]; then
+            cp "$APK" ./cut-tracker.apk
+          fi
       - name: Create Release
         if: success()
         uses: softprops/action-gh-release@v2
