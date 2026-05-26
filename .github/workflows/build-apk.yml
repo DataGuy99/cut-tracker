@@ -17,15 +17,33 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build Debug APK
         working-directory: android
-        run: |
-          gradle assembleDebug --stacktrace 2>&1 | tee build-output.log
+        run: gradle assembleDebug --stacktrace 2>&1 | tee build-output.log
       - name: Find APK
         id: apk
         run: |
-          APK=$(find android -name "*.apk" -type f | head -1)
-          echo "Found: $APK"
-          ls -la "$APK"
-          echo "path=$APK" >> $GITHUB_OUTPUT
+          echo "=== Searching everywhere ==="
+          find . -name "*.apk" -type f 2>/dev/null || true
+          find . -path "*/build/outputs/*" -type f 2>/dev/null || true
+          echo "=== Build outputs dir ==="
+          ls -laR android/app/build/outputs/ 2>/dev/null || echo "no outputs dir"
+          APK=$(find . -name "*.apk" -type f | head -1)
+          if [ -n "$APK" ]; then
+            echo "path=$APK" >> $GITHUB_OUTPUT
+            echo "Found APK: $APK"
+          else
+            echo "NO APK FOUND"
+            echo "=== Full build dir listing ==="
+            find android/app/build -type f 2>/dev/null | head -50 || echo "no build dir"
+          fi
+      - name: Upload APK as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/**/*.apk
+          if-no-files-found: warn
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -34,7 +52,7 @@ jobs:
           path: android/build-output.log
           if-no-files-found: warn
       - name: Create Release
-        if: success()
+        if: steps.apk.outputs.path != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0-${{ github.run_number }}
