@@ -3,7 +3,6 @@ package com.cuttracker.app
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
-import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -27,7 +26,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // AMOLED black status/nav bars
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = 0xFF0E0E0E.toInt()
         window.navigationBarColor = 0xFF0E0E0E.toInt()
@@ -42,17 +40,14 @@ class MainActivity : ComponentActivity() {
 
         webView.settings.apply {
             javaScriptEnabled = true
-            domStorageEnabled = true                // localStorage
-            databaseEnabled = true                  // IndexedDB
+            domStorageEnabled = true
+            databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
             allowContentAccess = true
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             setSupportZoom(false)
             useWideViewPort = true
             loadWithOverviewMode = true
-            // Keep data persistent across app restarts
-            @Suppress("DEPRECATION")
-            setAppCacheEnabled(true)
         }
 
         webView.webViewClient = object : WebViewClient() {
@@ -69,7 +64,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Handle back button - go back in WebView history if possible
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
@@ -81,7 +75,6 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        // Load the app
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
         } else {
