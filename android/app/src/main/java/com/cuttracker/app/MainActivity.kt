@@ -1,15 +1,20 @@
 package com.cuttracker.app
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.View
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.PermissionRequest
 import android.widget.ProgressBar
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 
@@ -17,9 +22,22 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
     private lateinit var progress: ProgressBar
+    private var pendingPermissionRequest: PermissionRequest? = null
 
     companion object {
         const val APP_URL = "https://dataguy99.github.io/cut-tracker/"
+    }
+
+    private val cameraPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val req = pendingPermissionRequest
+        pendingPermissionRequest = null
+        if (granted && req != null) {
+            req.grant(req.resources)
+        } else {
+            req?.deny()
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -44,6 +62,7 @@ class MainActivity : ComponentActivity() {
             databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
             allowContentAccess = true
+            mediaPlaybackRequiresUserGesture = false
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             setSupportZoom(false)
             useWideViewPort = true
@@ -62,8 +81,24 @@ class MainActivity : ComponentActivity() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 progress.progress = newProgress
             }
-            override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
-                request?.grant(request.resources)
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                request ?: return
+                val resources = request.resources
+                // Check if camera is requested
+                if (resources.contains(PermissionRequest.RESOURCE_VIDEO_CAPTURE)) {
+                    // Check Android runtime permission
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED) {
+                        request.grant(resources)
+                    } else {
+                        // Request Android permission, grant WebView permission in callback
+                        pendingPermissionRequest = request
+                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                    }
+                } else {
+                    request.grant(resources)
+                }
             }
         }
 
