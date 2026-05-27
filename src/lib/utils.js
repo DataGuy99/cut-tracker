@@ -47,8 +47,11 @@ export function getWeekDates(dateStr) {
 }
 
 export function extractMacros(foodNutrients) {
+  if (!foodNutrients || !Array.isArray(foodNutrients)) {
+    return { cal: 0, protein: 0, fat: 0, carbs: 0, fiber: 0 };
+  }
   const get = (id) => {
-    const n = foodNutrients?.find(
+    const n = foodNutrients.find(
       n => n.nutrientId === id || n.nutrientNumber === String(id)
     );
     return n ? Math.round(n.value * 10) / 10 : 0;

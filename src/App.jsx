@@ -27,20 +27,14 @@ function Bar({ label, cur, max, color, suffix = "" }) {
 }
 
 function FoodRow({ food, onAdd, onFav, isFav }) {
-  const [grams, setGrams] = useState(food.servings?.[0]?.grams || 100);
-  const [svgs, setSvgs] = useState(1);
-  const [selServing, setSelServing] = useState(-1); // -1 = manual grams
+  const [amount, setAmount] = useState("");
+  const [unit, setUnit] = useState("g"); // "g" or index into servings
   const m = food.customId ? food : extractMacros(food.foodNutrients);
-  const mult = (svgs * grams) / 100;
   const servingOptions = food.servings || [];
 
-  const pickServing = (idx) => {
-    setSelServing(idx);
-    if (idx >= 0 && servingOptions[idx]) {
-      setGrams(servingOptions[idx].grams);
-      setSvgs(1);
-    }
-  };
+  // Calculate grams from amount + unit
+  const grams = unit === "g" ? (+amount || 0) : (+amount || 0) * (servingOptions[+unit]?.grams || 100);
+  const mult = grams / 100;
 
   return (
     <div className="food-row">
@@ -52,29 +46,18 @@ function FoodRow({ food, onAdd, onFav, isFav }) {
         </div>
         <button className={isFav ? "fav-btn active" : "fav-btn"} onClick={() => onFav(food)}>&#9733;</button>
       </div>
-      {servingOptions.length > 0 && (
-        <div className="serving-options">
-          <button className={selServing === -1 ? "srv-btn active" : "srv-btn"} onClick={() => pickServing(-1)}>grams</button>
-          {servingOptions.slice(0, 4).map((s, i) => (
-            <button key={i} className={selServing === i ? "srv-btn active" : "srv-btn"} onClick={() => pickServing(i)}>
-              {s.label.length > 20 ? s.label.slice(0, 20) + "..." : s.label} ({s.grams}g)
-            </button>
-          ))}
-        </div>
-      )}
       <div className="food-row-bottom">
-        {selServing === -1 ? (
-          <>
-            <input type="number" value={grams} onChange={e => setGrams(e.target.value)} className="num-input" />
-            <span className="unit">g</span>
-          </>
-        ) : (
-          <span className="unit serving-label">{servingOptions[selServing]?.label}</span>
-        )}
-        <span className="unit">x</span>
-        <input type="number" value={svgs} onChange={e => setSvgs(e.target.value)} step="0.25" className="num-input sm" />
-        <div className="food-cal-preview">{Math.round(m.cal * mult)}cal</div>
-        <button className="add-btn" onClick={() => onAdd(food, grams, svgs)}>+</button>
+        <input type="number" value={amount} placeholder={unit === "g" ? "grams" : "how many"}
+          onChange={e => setAmount(e.target.value)} className="num-input" style={{width:70}} />
+        <select value={unit} onChange={e => { setUnit(e.target.value); setAmount(""); }}
+          className="num-input" style={{width:"auto",minWidth:50,textAlign:"left",padding:"5px 4px"}}>
+          <option value="g">grams</option>
+          {servingOptions.slice(0, 5).map((s, i) => (
+            <option key={i} value={i}>{s.label} ({s.grams}g)</option>
+          ))}
+        </select>
+        <div className="food-cal-preview">{grams > 0 ? `${Math.round(m.cal * mult)}cal` : ""}</div>
+        <button className="add-btn" onClick={() => { if (grams > 0) onAdd(food, grams, 1); setAmount(""); }}>+</button>
       </div>
     </div>
   );
@@ -193,15 +176,23 @@ export default function App() {
     setSearching(true);
     try {
       const [usda, off] = await Promise.allSettled([searchUSDA(q, apiKey, false), searchOFF(q)]);
-      const all = [...(usda.value || []), ...(off.value || [])];
-      // Deduplicate by normalized name
+      // USDA first (research-grade), then OFF (community, may have errors)
+      const usdaResults = usda.status === "fulfilled" ? (usda.value || []) : [];
+      const offResults = off.status === "fulfilled" ? (off.value || []).filter(f => {
+        // Validate OFF data - reject obvious garbage
+        const c = f.cal || 0, p = f.protein || 0;
+        if (c > 900) return false; // nothing is >900 cal/100g
+        if (c > 0 && p === 0 && !/sugar|candy|oil|butter|soda/i.test(f.description)) return false;
+        return true;
+      }) : [];
+      // Dedupe: USDA wins over OFF for same food
       const seen = new Set();
-      const deduped = all.filter(f => {
-        const key = (f.description || f.name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
-        if (seen.has(key)) return false;
+      const all = [...usdaResults, ...offResults].filter(f => {
+        const key = (f.description || f.name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 25);
+        if (!key || seen.has(key)) return false;
         seen.add(key); return true;
       });
-      setResults(deduped);
+      setResults(all);
     } catch { setResults([]); }
     setSearching(false);
   }, [apiKey]);
@@ -478,14 +469,14 @@ export default function App() {
               <div key={e.id} className={isEditing ? "log-entry editing" : "log-entry"}>
                 <div className="log-entry-info" onClick={() => setEditingFood(isEditing ? null : e.id)} style={{cursor:"pointer"}}>
                   <div className="log-entry-name">{e.name}</div>
-                  <div className="log-entry-detail">{e.servingG}g x{e.servings} = {Math.round(e.cal)}cal P:{Math.round(e.protein)} C:{Math.round(e.carbs)} F:{Math.round(e.fat)}</div>
+                  <div className="log-entry-detail">{e.servingG}g x{e.servings} = {Math.round(e.cal||0)}cal P:{Math.round(e.protein||0)} C:{Math.round(e.carbs||0)} F:{Math.round(e.fat||0)}</div>
                 </div>
                 {isEditing ? (
                   <div className="edit-row">
                     <input type="number" value={e.servingG} className="num-input"
                       onChange={ev => {
                         const g = +ev.target.value||"";
-                        const ratio = (e.servings * g) / (e.servings * e.servingG);
+                        const ratio = e.servingG > 0 ? g / e.servingG : 1;
                         const updated = dayFood.map(f => f.id === e.id ? {
                           ...f, servingG: g,
                           cal: f.cal * ratio, protein: f.protein * ratio,
@@ -497,7 +488,7 @@ export default function App() {
                     <input type="number" value={e.servings} step="0.25" className="num-input sm"
                       onChange={ev => {
                         const s = +ev.target.value||"";
-                        const ratio = (s * e.servingG) / (e.servings * e.servingG);
+                        const ratio = e.servings > 0 ? s / e.servings : 1;
                         const updated = dayFood.map(f => f.id === e.id ? {
                           ...f, servings: s,
                           cal: f.cal * ratio, protein: f.protein * ratio,
