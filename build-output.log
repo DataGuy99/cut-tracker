@@ -9,8 +9,8 @@ Starting a Gradle Daemon (subsequent builds will be faster)
 > Task :app:generateReleaseResources
 > Task :app:packageReleaseResources
 > Task :app:createReleaseCompatibleScreenManifests
-> Task :app:extractDeepLinksRelease
 > Task :app:mergeReleaseResources
+> Task :app:extractDeepLinksRelease
 > Task :app:parseReleaseLocalResources
 
 > Task :app:processReleaseMainManifest
@@ -23,26 +23,26 @@ Recommendation: remove package="com.cuttracker.app" from the source AndroidManif
 > Task :app:extractProguardFiles
 > Task :app:mergeReleaseJniLibFolders
 > Task :app:mergeReleaseNativeLibs NO-SOURCE
+> Task :app:processReleaseManifestForPackage
 > Task :app:stripReleaseDebugSymbols NO-SOURCE
 > Task :app:extractReleaseNativeSymbolTables NO-SOURCE
 > Task :app:mergeReleaseNativeDebugMetadata NO-SOURCE
 > Task :app:checkReleaseDuplicateClasses
 > Task :app:mergeReleaseStartupProfile
 > Task :app:mergeReleaseArtProfile
-> Task :app:processReleaseManifestForPackage
 > Task :app:mergeReleaseShaders
 > Task :app:compileReleaseShaders NO-SOURCE
 > Task :app:generateReleaseAssets UP-TO-DATE
 > Task :app:mergeReleaseAssets
 > Task :app:compressReleaseAssets
 > Task :app:extractReleaseVersionControlInfo
-> Task :app:collectReleaseDependencies
 > Task :app:processReleaseResources
+> Task :app:collectReleaseDependencies
 > Task :app:sdkReleaseDependencyData
+> Task :app:optimizeReleaseResources
 > Task :app:validateSigningRelease
 > Task :app:writeReleaseAppMetadata
 > Task :app:writeReleaseSigningConfigVersions
-> Task :app:optimizeReleaseResources
 > Task :app:compileReleaseKotlin
 > Task :app:compileReleaseJavaWithJavac NO-SOURCE
 > Task :app:generateReleaseLintVitalReportModel
@@ -58,8 +58,8 @@ Recommendation: remove package="com.cuttracker.app" from the source AndroidManif
 > Task :app:packageRelease
 > Task :app:createReleaseApkListingFileRedirect
 > Task :app:assembleRelease
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1779893508696.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1779894160618.json
 
-BUILD SUCCESSFUL in 36s
+BUILD SUCCESSFUL in 38s
 44 actionable tasks: 44 executed
 ./android/app/build/outputs/apk/release/app-release.apk
