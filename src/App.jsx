@@ -4,7 +4,7 @@ import { load, save, exportAll, clearAll, ALL_KEYS } from "./lib/storage";
 import {
   DAYS, SHORT_DAYS, DEFAULT_TARGETS, MET_HOURS_TARGET, MET_MINS_TARGET,
   today, dateKey, dayOfWeekFor, shiftDateStr, getWeekDates,
-  extractMacros, searchUSDA,
+  extractMacros, searchUSDA, searchOFF,
 } from "./lib/utils";
 import "./App.css";
 
@@ -26,10 +26,21 @@ function Bar({ label, cur, max, color, suffix = "" }) {
 }
 
 function FoodRow({ food, onAdd, onFav, isFav }) {
-  const [grams, setGrams] = useState(100);
+  const [grams, setGrams] = useState(food.servings?.[0]?.grams || 100);
   const [svgs, setSvgs] = useState(1);
+  const [selServing, setSelServing] = useState(-1); // -1 = manual grams
   const m = food.customId ? food : extractMacros(food.foodNutrients);
   const mult = (svgs * grams) / 100;
+  const servingOptions = food.servings || [];
+
+  const pickServing = (idx) => {
+    setSelServing(idx);
+    if (idx >= 0 && servingOptions[idx]) {
+      setGrams(servingOptions[idx].grams);
+      setSvgs(1);
+    }
+  };
+
   return (
     <div className="food-row">
       <div className="food-row-top">
@@ -40,11 +51,27 @@ function FoodRow({ food, onAdd, onFav, isFav }) {
         </div>
         <button className={isFav ? "fav-btn active" : "fav-btn"} onClick={() => onFav(food)}>&#9733;</button>
       </div>
+      {servingOptions.length > 0 && (
+        <div className="serving-options">
+          <button className={selServing === -1 ? "srv-btn active" : "srv-btn"} onClick={() => pickServing(-1)}>grams</button>
+          {servingOptions.slice(0, 4).map((s, i) => (
+            <button key={i} className={selServing === i ? "srv-btn active" : "srv-btn"} onClick={() => pickServing(i)}>
+              {s.label.length > 20 ? s.label.slice(0, 20) + "..." : s.label} ({s.grams}g)
+            </button>
+          ))}
+        </div>
+      )}
       <div className="food-row-bottom">
-        <input type="number" value={grams} onChange={e => setGrams(Math.max(1, +e.target.value || 0))} className="num-input" />
-        <span className="unit">g</span>
-        <input type="number" value={svgs} onChange={e => setSvgs(Math.max(0.25, +e.target.value || 0))} step="0.25" className="num-input sm" />
+        {selServing === -1 ? (
+          <>
+            <input type="number" value={grams} onChange={e => setGrams(Math.max(1, +e.target.value || 0))} className="num-input" />
+            <span className="unit">g</span>
+          </>
+        ) : (
+          <span className="unit serving-label">{servingOptions[selServing]?.label}</span>
+        )}
         <span className="unit">x</span>
+        <input type="number" value={svgs} onChange={e => setSvgs(Math.max(0.25, +e.target.value || 0))} step="0.25" className="num-input sm" />
         <div className="food-cal-preview">{Math.round(m.cal * mult)}cal</div>
         <button className="add-btn" onClick={() => onAdd(food, grams, svgs)}>+</button>
       </div>
@@ -71,6 +98,7 @@ export default function App() {
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [searchBranded, setSearchBranded] = useState(false);
+  const [searchSource, setSearchSource] = useState("usda"); // usda, off, both
   const [showFavs, setShowFavs] = useState(false);
   const searchTimer = useRef(null);
 
@@ -142,13 +170,24 @@ export default function App() {
     return [...pick("Legs", 2), ...pick("Push", 2), ...pick("Pull", 2), ...pick("Arms", 1)];
   }, [activeExercises]);
 
+  // Editing food
+  const [editingFood, setEditingFood] = useState(null); // entry id being edited
+
   // ─── Food search ───
   const doSearch = useCallback(async (q) => {
     setSearching(true);
-    try { setResults(await searchUSDA(q, apiKey, searchBranded)); }
-    catch { setResults([]); }
+    try {
+      let combined = [];
+      if (searchSource === "usda" || searchSource === "both") {
+        combined = [...combined, ...(await searchUSDA(q, apiKey, searchBranded))];
+      }
+      if (searchSource === "off" || searchSource === "both") {
+        combined = [...combined, ...(await searchOFF(q))];
+      }
+      setResults(combined);
+    } catch { setResults([]); }
     setSearching(false);
-  }, [apiKey, searchBranded]);
+  }, [apiKey, searchBranded, searchSource]);
 
   const onQueryChange = (v) => {
     setQuery(v); setShowFavs(false);
@@ -358,13 +397,21 @@ export default function App() {
           </div>
           <div className="search-controls">
             <button className={showFavs ? "btn-sm gold" : "btn-sm"} onClick={() => setShowFavs(!showFavs)}>
-              &#9733; Favs{favorites.length > 0 ? ` (${favorites.length})` : ""}
+              &#9733;{favorites.length > 0 ? ` ${favorites.length}` : ""}
             </button>
-            <button className={searchBranded ? "btn-sm blue" : "btn-sm"}
-              onClick={() => { setSearchBranded(!searchBranded); if (query.length >= 2) doSearch(query); }}>
-              {searchBranded ? "All DBs" : "Curated"}
-            </button>
-            <div className="result-count">{results.length > 0 ? `${results.length} results` : ""}</div>
+            {["usda","off","both"].map(s => (
+              <button key={s} className={searchSource === s ? "btn-sm green" : "btn-sm"}
+                onClick={() => { setSearchSource(s); if (query.length >= 2) doSearch(query); }}>
+                {s === "usda" ? "USDA" : s === "off" ? "OFF" : "Both"}
+              </button>
+            ))}
+            {searchSource !== "off" && (
+              <button className={searchBranded ? "btn-sm blue" : "btn-sm"}
+                onClick={() => { setSearchBranded(!searchBranded); if (query.length >= 2) doSearch(query); }}>
+                {searchBranded ? "Branded" : "Curated"}
+              </button>
+            )}
+            <div className="result-count">{results.length > 0 ? `${results.length}` : ""}</div>
           </div>
 
           {displayFoods.length > 0 && (
@@ -375,15 +422,47 @@ export default function App() {
 
           <div className="label">Logged ({dayFood.length})</div>
           {dayFood.length === 0 && <div className="empty">No entries</div>}
-          {dayFood.map(e => (
-            <div key={e.id} className="log-entry">
-              <div className="log-entry-info">
-                <div className="log-entry-name">{e.name}</div>
-                <div className="log-entry-detail">{e.servingG}g x{e.servings} = {Math.round(e.cal)}cal P:{Math.round(e.protein)} C:{Math.round(e.carbs)} F:{Math.round(e.fat)}</div>
+          {dayFood.map(e => {
+            const isEditing = editingFood === e.id;
+            return (
+              <div key={e.id} className={isEditing ? "log-entry editing" : "log-entry"}>
+                <div className="log-entry-info" onClick={() => setEditingFood(isEditing ? null : e.id)} style={{cursor:"pointer"}}>
+                  <div className="log-entry-name">{e.name}</div>
+                  <div className="log-entry-detail">{e.servingG}g x{e.servings} = {Math.round(e.cal)}cal P:{Math.round(e.protein)} C:{Math.round(e.carbs)} F:{Math.round(e.fat)}</div>
+                </div>
+                {isEditing ? (
+                  <div className="edit-row">
+                    <input type="number" value={e.servingG} className="num-input"
+                      onChange={ev => {
+                        const g = Math.max(1, +ev.target.value || 0);
+                        const ratio = (e.servings * g) / (e.servings * e.servingG);
+                        const updated = dayFood.map(f => f.id === e.id ? {
+                          ...f, servingG: g,
+                          cal: f.cal * ratio, protein: f.protein * ratio,
+                          carbs: f.carbs * ratio, fat: f.fat * ratio,
+                        } : f);
+                        sv("food", { ...foodLogs, [viewDate]: updated }, setFoodLogs);
+                      }} />
+                    <span className="unit">g x</span>
+                    <input type="number" value={e.servings} step="0.25" className="num-input sm"
+                      onChange={ev => {
+                        const s = Math.max(0.25, +ev.target.value || 0);
+                        const ratio = (s * e.servingG) / (e.servings * e.servingG);
+                        const updated = dayFood.map(f => f.id === e.id ? {
+                          ...f, servings: s,
+                          cal: f.cal * ratio, protein: f.protein * ratio,
+                          carbs: f.carbs * ratio, fat: f.fat * ratio,
+                        } : f);
+                        sv("food", { ...foodLogs, [viewDate]: updated }, setFoodLogs);
+                      }} />
+                    <button className="remove-btn" onClick={() => { removeFood(e.id); setEditingFood(null); }}>&times;</button>
+                  </div>
+                ) : (
+                  <button className="remove-btn" onClick={() => removeFood(e.id)}>&times;</button>
+                )}
               </div>
-              <button className="remove-btn" onClick={() => removeFood(e.id)}>&times;</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

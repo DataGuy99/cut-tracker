@@ -70,5 +70,63 @@ export async function searchUSDA(query, apiKey, includeBranded = false) {
   const url = `${USDA_BASE}?api_key=${apiKey}&query=${encodeURIComponent(query)}&dataType=${dt}&pageSize=15&sortBy=dataType.keyword&sortOrder=asc`;
   const res = await fetch(url);
   const data = await res.json();
-  return data.foods || [];
+  // Extract household servings from foodMeasures
+  return (data.foods || []).map(f => ({
+    ...f,
+    servings: (f.foodMeasures || [])
+      .filter(m => m.disseminationText && m.gramWeight > 0)
+      .map(m => ({ label: m.disseminationText, grams: Math.round(m.gramWeight) }))
+  }));
+}
+
+// Open Food Facts - no key needed, has barcodes + household servings
+const OFF_BASE = "https://world.openfoodfacts.org";
+
+export async function searchOFF(query) {
+  if (!query || query.length < 2) return [];
+  const url = `${OFF_BASE}/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=10&search_simple=1&action=process`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return (data.products || []).map(p => {
+    const n = p.nutriments || {};
+    return {
+      description: p.product_name || p.generic_name || "Unknown",
+      brandName: p.brands || null,
+      dataType: "OpenFoodFacts",
+      fdcId: null,
+      offCode: p.code || null,
+      foodNutrients: null,
+      // Pre-extracted macros per 100g
+      cal: Math.round(n["energy-kcal_100g"] || 0),
+      protein: Math.round((n.proteins_100g || 0) * 10) / 10,
+      fat: Math.round((n.fat_100g || 0) * 10) / 10,
+      carbs: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
+      fiber: Math.round((n.fiber_100g || 0) * 10) / 10,
+      customId: `off-${p.code || p._id}`,
+      servings: p.serving_size ? [{ label: p.serving_size, grams: Math.round(p.serving_quantity || 100) }] : [],
+      image: p.image_small_url || null,
+    };
+  }).filter(p => p.description && p.description !== "Unknown" && p.cal > 0);
+}
+
+export async function lookupBarcode(code) {
+  const url = `${OFF_BASE}/api/v0/product/${code}.json`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.status !== 1 || !data.product) return null;
+  const p = data.product;
+  const n = p.nutriments || {};
+  return {
+    description: p.product_name || "Unknown",
+    brandName: p.brands || null,
+    dataType: "OpenFoodFacts",
+    offCode: code,
+    customId: `off-${code}`,
+    cal: Math.round(n["energy-kcal_100g"] || 0),
+    protein: Math.round((n.proteins_100g || 0) * 10) / 10,
+    fat: Math.round((n.fat_100g || 0) * 10) / 10,
+    carbs: Math.round((n.carbohydrates_100g || 0) * 10) / 10,
+    fiber: Math.round((n.fiber_100g || 0) * 10) / 10,
+    servings: p.serving_size ? [{ label: p.serving_size, grams: Math.round(p.serving_quantity || 100) }] : [],
+  };
 }
