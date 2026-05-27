@@ -100,9 +100,7 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [searchBranded, setSearchBranded] = useState(false);
-  const [searchSource, setSearchSource] = useState("usda"); // usda, off, both
-  const [showFavs, setShowFavs] = useState(false);
+    const [showFavs, setShowFavs] = useState(false);
   const searchTimer = useRef(null);
   const [scanActive, setScanActive] = useState(false);
   const scanRef = useRef(null);
@@ -194,17 +192,19 @@ export default function App() {
   const doSearch = useCallback(async (q) => {
     setSearching(true);
     try {
-      let combined = [];
-      if (searchSource === "usda" || searchSource === "both") {
-        combined = [...combined, ...(await searchUSDA(q, apiKey, searchBranded))];
-      }
-      if (searchSource === "off" || searchSource === "both") {
-        combined = [...combined, ...(await searchOFF(q))];
-      }
-      setResults(combined);
+      const [usda, off] = await Promise.allSettled([searchUSDA(q, apiKey, false), searchOFF(q)]);
+      const all = [...(usda.value || []), ...(off.value || [])];
+      // Deduplicate by normalized name
+      const seen = new Set();
+      const deduped = all.filter(f => {
+        const key = (f.description || f.name || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      setResults(deduped);
     } catch { setResults([]); }
     setSearching(false);
-  }, [apiKey, searchBranded, searchSource]);
+  }, [apiKey]);
 
   const startScan = async () => {
     const { loadBarcodeLib, lookupBarcode: lb } = await import("./lib/utils");
@@ -225,7 +225,7 @@ export default function App() {
   const onQueryChange = (v) => {
     setQuery(v); setShowFavs(false);
     clearTimeout(searchTimer.current);
-    if (v.length >= 2) searchTimer.current = setTimeout(() => doSearch(v), 400);
+    if (v.length >= 2) searchTimer.current = setTimeout(() => doSearch(v), 250);
     else setResults([]);
   };
 
@@ -461,19 +461,7 @@ export default function App() {
             <button className={showFavs ? "btn-sm gold" : "btn-sm"} onClick={() => setShowFavs(!showFavs)}>
               &#9733;{favorites.length > 0 ? ` ${favorites.length}` : ""}
             </button>
-            {["usda","off","both"].map(s => (
-              <button key={s} className={searchSource === s ? "btn-sm green" : "btn-sm"}
-                onClick={() => { setSearchSource(s); if (query.length >= 2) doSearch(query); }}>
-                {s === "usda" ? "USDA" : s === "off" ? "OFF" : "Both"}
-              </button>
-            ))}
-            {searchSource !== "off" && (
-              <button className={searchBranded ? "btn-sm blue" : "btn-sm"}
-                onClick={() => { setSearchBranded(!searchBranded); if (query.length >= 2) doSearch(query); }}>
-                {searchBranded ? "Branded" : "Curated"}
-              </button>
-            )}
-            <div className="result-count">{results.length > 0 ? `${results.length}` : ""}</div>
+            <div className="result-count">{results.length > 0 ? `${results.length} results` : ""}</div>
           </div>
 
           {displayFoods.length > 0 && (
@@ -496,7 +484,7 @@ export default function App() {
                   <div className="edit-row">
                     <input type="number" value={e.servingG} className="num-input"
                       onChange={ev => {
-                        const g = Math.max(1, +ev.target.value || 0);
+                        const g = +ev.target.value||"";
                         const ratio = (e.servings * g) / (e.servings * e.servingG);
                         const updated = dayFood.map(f => f.id === e.id ? {
                           ...f, servingG: g,
@@ -508,7 +496,7 @@ export default function App() {
                     <span className="unit">g x</span>
                     <input type="number" value={e.servings} step="0.25" className="num-input sm"
                       onChange={ev => {
-                        const s = Math.max(0.25, +ev.target.value || 0);
+                        const s = +ev.target.value||"";
                         const ratio = (s * e.servingG) / (e.servings * e.servingG);
                         const updated = dayFood.map(f => f.id === e.id ? {
                           ...f, servings: s,
@@ -558,7 +546,7 @@ export default function App() {
               <div className="set-entry">
                 <div className="set-entry-header">
                   <span className="label-inline">RIR</span>
-                  <input type="number" value={wRir} onChange={e => setWRir(Math.max(0, +e.target.value || 0))} className="num-input sm" />
+                  <input type="number" value={wRir} onChange={e => setWRir(+e.target.value||"")} className="num-input sm" />
                   <div className="spacer" />
                   <button className="btn-sm green" onClick={() => setSetData([...setData, { w: setData[setData.length - 1]?.w || 135, r: setData[setData.length - 1]?.r || 10 }])}>+ Set</button>
                   {setData.length > 1 && <button className="btn-sm red" onClick={() => setSetData(setData.slice(0, -1))}>- Set</button>}
@@ -569,9 +557,9 @@ export default function App() {
                     <div key={i} className="set-grid-row">
                       <span className="set-label">S{i + 1}</span>
                       <input type="number" value={s.w} step={5} className="num-input"
-                        onChange={e => { const d = [...setData]; d[i] = { ...d[i], w: Math.max(0, +e.target.value || 0) }; setSetData(d); }} />
+                        onChange={e => { const d = [...setData]; d[i] = { ...d[i], w: +e.target.value||"" }; setSetData(d); }} />
                       <input type="number" value={s.r} className="num-input"
-                        onChange={e => { const d = [...setData]; d[i] = { ...d[i], r: Math.max(0, +e.target.value || 0) }; setSetData(d); }} />
+                        onChange={e => { const d = [...setData]; d[i] = { ...d[i], r: +e.target.value||"" }; setSetData(d); }} />
                     </div>
                   ))}
                 </div>
@@ -657,7 +645,7 @@ export default function App() {
                 </div>
                 <div className="set-grid-row">
                   <span className="set-label">Rnds</span>
-                  <input type="number" value={cRounds} onChange={e => setCRounds(Math.max(1, +e.target.value || 0))} className="num-input" />
+                  <input type="number" value={cRounds} onChange={e => setCRounds(+e.target.value||"")} className="num-input" />
                   <span className="unit">rounds</span>
                 </div>
                 <div className="set-grid-row">
@@ -725,7 +713,7 @@ export default function App() {
                               <div key={k2}>
                                 <div className="tiny-label">{l2}</div>
                                 <input type="number" value={t[k2]} className="num-input"
-                                  onChange={e => sv("targets", { ...targets, [i]: { ...t, [k2]: Math.max(0, +e.target.value || 0) } }, setTargets)} />
+                                  onChange={e => sv("targets", { ...targets, [i]: { ...t, [k2]: +e.target.value||"" } }, setTargets)} />
                               </div>
                             ))}
                             <button className="btn-sm full-span" onClick={() => {
