@@ -19,7 +19,6 @@ Setting the namespace via the package attribute in the source AndroidManifest.xm
 Recommendation: remove package="com.cuttracker.app" from the source AndroidManifest.xml: /home/runner/work/cut-tracker/cut-tracker/android/app/src/main/AndroidManifest.xml.
 
 > Task :app:processReleaseManifest
-> Task :app:processReleaseManifestForPackage
 > Task :app:javaPreCompileRelease
 > Task :app:extractProguardFiles
 > Task :app:mergeReleaseJniLibFolders
@@ -30,19 +29,20 @@ Recommendation: remove package="com.cuttracker.app" from the source AndroidManif
 > Task :app:checkReleaseDuplicateClasses
 > Task :app:mergeReleaseStartupProfile
 > Task :app:mergeReleaseArtProfile
+> Task :app:processReleaseManifestForPackage
 > Task :app:mergeReleaseShaders
 > Task :app:compileReleaseShaders NO-SOURCE
 > Task :app:generateReleaseAssets UP-TO-DATE
 > Task :app:mergeReleaseAssets
 > Task :app:compressReleaseAssets
-> Task :app:processReleaseResources
 > Task :app:extractReleaseVersionControlInfo
 > Task :app:collectReleaseDependencies
-> Task :app:optimizeReleaseResources
+> Task :app:processReleaseResources
 > Task :app:sdkReleaseDependencyData
 > Task :app:validateSigningRelease
 > Task :app:writeReleaseAppMetadata
 > Task :app:writeReleaseSigningConfigVersions
+> Task :app:optimizeReleaseResources
 > Task :app:compileReleaseKotlin
 > Task :app:compileReleaseJavaWithJavac NO-SOURCE
 > Task :app:generateReleaseLintVitalReportModel
@@ -58,8 +58,8 @@ Recommendation: remove package="com.cuttracker.app" from the source AndroidManif
 > Task :app:packageRelease
 > Task :app:createReleaseApkListingFileRedirect
 > Task :app:assembleRelease
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1779852410882.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_3-1779893508696.json
 
-BUILD SUCCESSFUL in 47s
+BUILD SUCCESSFUL in 36s
 44 actionable tasks: 44 executed
 ./android/app/build/outputs/apk/release/app-release.apk
