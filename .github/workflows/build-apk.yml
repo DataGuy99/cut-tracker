@@ -17,17 +17,26 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/keystore.jks
       - name: Generate wrapper
         working-directory: android
         run: |
           gradle wrapper --gradle-version 8.9
           chmod +x gradlew
-      - name: Build Debug APK
+      - name: Build Release APK
         working-directory: android
         shell: bash
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/keystore.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
         run: |
           set -o pipefail
-          ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
+          ./gradlew :app:assembleRelease --stacktrace 2>&1 | tee build-output.log
       - name: Commit log
         if: always()
         run: |
@@ -41,7 +50,7 @@ jobs:
       - name: Release APK
         if: success()
         run: |
-          APK=$(find android -name "*.apk" -type f | head -1)
+          APK=$(find android -name "*release*.apk" -type f | head -1)
           [ -n "$APK" ] && cp "$APK" ./cut-tracker.apk
       - name: Create Release
         if: success()
