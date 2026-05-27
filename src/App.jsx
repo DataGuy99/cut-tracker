@@ -65,14 +65,14 @@ function FoodRow({ food, onAdd, onFav, isFav }) {
       <div className="food-row-bottom">
         {selServing === -1 ? (
           <>
-            <input type="number" value={grams} onChange={e => setGrams(Math.max(1, +e.target.value || 0))} className="num-input" />
+            <input type="number" value={grams} onChange={e => setGrams(e.target.value)} className="num-input" />
             <span className="unit">g</span>
           </>
         ) : (
           <span className="unit serving-label">{servingOptions[selServing]?.label}</span>
         )}
         <span className="unit">x</span>
-        <input type="number" value={svgs} onChange={e => setSvgs(Math.max(0.25, +e.target.value || 0))} step="0.25" className="num-input sm" />
+        <input type="number" value={svgs} onChange={e => setSvgs(e.target.value)} step="0.25" className="num-input sm" />
         <div className="food-cal-preview">{Math.round(m.cal * mult)}cal</div>
         <button className="add-btn" onClick={() => onAdd(food, grams, svgs)}>+</button>
       </div>
@@ -104,6 +104,8 @@ export default function App() {
   const [searchSource, setSearchSource] = useState("usda"); // usda, off, both
   const [showFavs, setShowFavs] = useState(false);
   const searchTimer = useRef(null);
+  const [scanActive, setScanActive] = useState(false);
+  const scanRef = useRef(null);
 
   // Workout entry
   const [selExercise, setSelExercise] = useState(null);
@@ -203,6 +205,22 @@ export default function App() {
     } catch { setResults([]); }
     setSearching(false);
   }, [apiKey, searchBranded, searchSource]);
+
+  const startScan = async () => {
+    const { loadBarcodeLib, lookupBarcode: lb } = await import("./lib/utils");
+    const Html5Qrcode = await loadBarcodeLib();
+    setScanActive(true);
+    setTimeout(async () => {
+      try {
+        const scanner = new Html5Qrcode("barcode-reader");
+        scanRef.current = scanner;
+        await scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 150 } },
+          async (code) => { await scanner.stop(); setScanActive(false); const food = await lb(code); if (food) { setResults([food]); setShowFavs(false); } }
+        );
+      } catch (e) { console.error(e); setScanActive(false); }
+    }, 100);
+  };
+  const stopScan = async () => { if (scanRef.current) try { await scanRef.current.stop(); } catch {} setScanActive(false); };
 
   const onQueryChange = (v) => {
     setQuery(v); setShowFavs(false);
@@ -434,8 +452,10 @@ export default function App() {
           </div>
 
           <div className="search-wrap">
+            {scanActive && <div id="barcode-reader" style={{marginBottom:8,borderRadius:6,overflow:"hidden"}}></div>}
             <input type="text" placeholder="Search food..." value={query} onChange={e => onQueryChange(e.target.value)} className="input" />
             {searching && <div className="search-spinner">...</div>}
+            <button className={scanActive ? "scan-btn active" : "scan-btn"} onClick={scanActive ? stopScan : startScan}>{scanActive ? "X" : "📷"}</button>
           </div>
           <div className="search-controls">
             <button className={showFavs ? "btn-sm gold" : "btn-sm"} onClick={() => setShowFavs(!showFavs)}>
@@ -663,16 +683,16 @@ export default function App() {
           <div className="setup-tdee">
             <div className="label">Base TDEE (sedentary)</div>
             <div className="tdee-row">
-              <input type="number" value={tdee} onChange={e => sv("tdee", Math.max(0, +e.target.value || 0), setTdee)} className="num-input lg" />
+              <input type="number" value={tdee} onChange={e => setTdee(e.target.value)} onBlur={e => { const v = +e.target.value; if (v >= 0) sv("tdee", v, setTdee); }} className="num-input lg" />
               <span className="unit">cal/day (exercise adds on top)</span>
             </div>
           </div>
           <div className="setup-tdee">
             <div className="label">Body stats (for HR calorie formula)</div>
             <div className="tdee-row">
-              <input type="number" value={userWeightLbs} onChange={e => sv("user_wt", Math.max(50, +e.target.value || 0), setUserWeightLbs)} className="num-input lg" />
+              <input type="number" value={userWeightLbs} onChange={e => setUserWeightLbs(e.target.value)} onBlur={e => { const v = +e.target.value; if (v > 0) sv("user_wt", v, setUserWeightLbs); }} className="num-input lg" />
               <span className="unit">lbs</span>
-              <input type="number" value={userAge} onChange={e => sv("user_age", Math.max(10, +e.target.value || 0), setUserAge)} className="num-input" />
+              <input type="number" value={userAge} onChange={e => setUserAge(e.target.value)} onBlur={e => { const v = +e.target.value; if (v > 0) sv("user_age", v, setUserAge); }} className="num-input" />
               <span className="unit">age</span>
             </div>
           </div>

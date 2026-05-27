@@ -71,12 +71,22 @@ export async function searchUSDA(query, apiKey, includeBranded = false) {
   const res = await fetch(url);
   const data = await res.json();
   // Extract household servings from foodMeasures
-  return (data.foods || []).map(f => ({
+  const MEAT = /chicken|beef|pork|turkey|lamb|steak|ground|thigh|breast|loin|roast|brisket|ribs/i;
+  const foods = (data.foods || []).map(f => ({
     ...f,
     servings: (f.foodMeasures || [])
       .filter(m => m.disseminationText && m.gramWeight > 0)
       .map(m => ({ label: m.disseminationText, grams: Math.round(m.gramWeight) }))
   }));
+  return foods.sort((a, b) => {
+    const aD = (a.description || "").toLowerCase();
+    const bD = (b.description || "").toLowerCase();
+    const aRawMeat = MEAT.test(aD) && /\braw\b/.test(aD);
+    const bRawMeat = MEAT.test(bD) && /\braw\b/.test(bD);
+    if (aRawMeat && !bRawMeat) return 1;
+    if (bRawMeat && !aRawMeat) return -1;
+    return 0;
+  });
 }
 
 // Open Food Facts - no key needed, has barcodes + household servings
@@ -181,3 +191,16 @@ export function calToMet(calPerMin, weightKg) {
   return calPerHour / (weightKg * 1.05);
 }
 
+
+let _scanLib = null;
+export async function loadBarcodeLib() {
+  if (_scanLib) return _scanLib;
+  return new Promise((resolve, reject) => {
+    if (window.Html5Qrcode) { _scanLib = window.Html5Qrcode; return resolve(_scanLib); }
+    const s = document.createElement("script");
+    s.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
+    s.onload = () => { _scanLib = window.Html5Qrcode; resolve(_scanLib); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
