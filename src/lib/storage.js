@@ -47,4 +47,5 @@ export function clearAll(keys) {
 export const ALL_KEYS = [
   "targets", "tdee", "food", "work", "favs",
   "custom", "weight", "blocked", "apikey",
+  "user_wt", "user_age",
 ];

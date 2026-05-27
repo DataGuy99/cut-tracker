@@ -130,3 +130,54 @@ export async function lookupBarcode(code) {
     servings: p.serving_size ? [{ label: p.serving_size, grams: Math.round(p.serving_quantity || 100) }] : [],
   };
 }
+
+// ─── Cycling / Cardio calorie estimation ───
+// Keytel formula (male): cal/min = (-55.0969 + 0.6309*HR + 0.1988*weight_kg + 0.2017*age) / 4.184
+export function caloriesPerMinute(hr, weightKg, age) {
+  return Math.max(0, (-55.0969 + 0.6309 * hr + 0.1988 * weightKg + 0.2017 * age) / 4.184);
+}
+
+// Steady state: average HR over duration
+export function steadyStateBurn(avgHr, durationMin, weightKg, age) {
+  const cpm = caloriesPerMinute(avgHr, weightKg, age);
+  return Math.round(cpm * durationMin);
+}
+
+// HIIT: segments at different HRs + EPOC modifier
+// segments: [{hr, minutes}]  e.g. [{hr:170, minutes:4}, {hr:130, minutes:4}]
+// rounds: how many times the segment pattern repeats
+// warmup/cooldown added separately
+export function hiitBurn(segments, rounds, warmupMin, cooldownMin, warmupHr, cooldownHr, weightKg, age) {
+  let total = 0;
+  // Warmup
+  if (warmupMin > 0 && warmupHr > 0) {
+    total += caloriesPerMinute(warmupHr, weightKg, age) * warmupMin;
+  }
+  // Interval rounds
+  for (let r = 0; r < rounds; r++) {
+    for (const seg of segments) {
+      total += caloriesPerMinute(seg.hr, weightKg, age) * seg.minutes;
+    }
+  }
+  // Cooldown
+  if (cooldownMin > 0 && cooldownHr > 0) {
+    total += caloriesPerMinute(cooldownHr, weightKg, age) * cooldownMin;
+  }
+  // EPOC: ~15% additional for HIIT
+  total *= 1.15;
+  return Math.round(total);
+}
+
+// Total duration of a HIIT session
+export function hiitDuration(segments, rounds, warmupMin, cooldownMin) {
+  const intervalMin = segments.reduce((s, seg) => s + seg.minutes, 0) * rounds;
+  return warmupMin + intervalMin + cooldownMin;
+}
+
+// Estimate MET from calorie burn rate
+export function calToMet(calPerMin, weightKg) {
+  // 1 MET = 1 kcal/kg/hr = weightKg * 1.0 cal/hr at rest
+  const calPerHour = calPerMin * 60;
+  return calPerHour / (weightKg * 1.05);
+}
+

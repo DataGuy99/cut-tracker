@@ -5,6 +5,7 @@ import {
   DAYS, SHORT_DAYS, DEFAULT_TARGETS, MET_HOURS_TARGET, MET_MINS_TARGET,
   today, dateKey, dayOfWeekFor, shiftDateStr, getWeekDates,
   extractMacros, searchUSDA, searchOFF,
+  steadyStateBurn, hiitBurn, hiitDuration, calToMet, caloriesPerMinute,
 } from "./lib/utils";
 import "./App.css";
 
@@ -91,6 +92,8 @@ export default function App() {
   const [weightLog, setWeightLog] = useState(() => load("weight", {}));
   const [blocked, setBlocked] = useState(() => load("blocked", BLOCKED_DEFAULT));
   const [apiKey, setApiKey] = useState(() => load("apikey", "DEMO_KEY"));
+  const [userWeightLbs, setUserWeightLbs] = useState(() => load("user_wt", 200));
+  const [userAge, setUserAge] = useState(() => load("user_age", 30));
   const [viewDate, setViewDate] = useState(today());
 
   // Food search
@@ -108,6 +111,18 @@ export default function App() {
   const [wRir, setWRir] = useState(2);
   const [showExList, setShowExList] = useState(false);
   const [exFilter, setExFilter] = useState("All");
+
+  // Cardio entry
+  const [cardioMode, setCardioMode] = useState("steady");
+  const [cAvgHr, setCAvgHr] = useState(140);
+  const [cDur, setCDur] = useState(45);
+  const [cHighHr, setCHighHr] = useState(170);
+  const [cLowHr, setCLowHr] = useState(130);
+  const [cHighMin, setCHighMin] = useState(4);
+  const [cLowMin, setCLowMin] = useState(4);
+  const [cRounds, setCRounds] = useState(4);
+  const [cWarmup, setCWarmup] = useState(5);
+  const [cCooldown, setCCooldown] = useState(5);
 
   // Weight + setup
   const [weightIn, setWeightIn] = useState("");
@@ -253,6 +268,33 @@ export default function App() {
 
   const removeExercise = (id) => {
     sv("work", { ...workLogs, [viewDate]: (workLogs[viewDate] || []).filter(e => e.id !== id) }, setWorkLogs);
+  };
+
+  // ─── Cardio actions ───
+  const userWtKg = userWeightLbs * 0.4536;
+  const addCardio = () => {
+    let burn, dur, name, details;
+    if (cardioMode === "steady") {
+      burn = steadyStateBurn(cAvgHr, cDur, userWtKg, userAge);
+      dur = cDur;
+      name = "Cycling (steady)";
+      details = `${cDur}min avg ${cAvgHr}bpm`;
+    } else {
+      const segs = [{ hr: cHighHr, minutes: cHighMin }, { hr: cLowHr, minutes: cLowMin }];
+      burn = hiitBurn(segs, cRounds, cWarmup, cCooldown, cLowHr, cLowHr, userWtKg, userAge);
+      dur = hiitDuration(segs, cRounds, cWarmup, cCooldown);
+      name = "Cycling (HIIT)";
+      details = `${cRounds}x (${cHighMin}min@${cHighHr} / ${cLowMin}min@${cLowHr}) +w/c`;
+    }
+    const avgCpm = burn / dur;
+    const met = calToMet(avgCpm, userWtKg);
+    const metMin = Math.round(met * dur);
+    const entry = {
+      id: Date.now(), exId: "cardio", name, type: "cardio",
+      sets: [], rir: null, burn, metMin, details, duration: dur,
+      muscles: [],
+    };
+    sv("work", { ...workLogs, [viewDate]: [...(workLogs[viewDate] || []), entry] }, setWorkLogs);
   };
 
   // Date nav
@@ -553,6 +595,65 @@ export default function App() {
               ))}
             </div>
           )}
+
+          {/* Cardio */}
+          <div className="card" style={{marginTop: 12}}>
+            <div className="label">Cardio / Cycling</div>
+            <div className="cat-filters" style={{marginTop: 6, marginBottom: 10}}>
+              <button className={cardioMode === "steady" ? "btn-sm green" : "btn-sm"} onClick={() => setCardioMode("steady")}>Steady</button>
+              <button className={cardioMode === "hiit" ? "btn-sm green" : "btn-sm"} onClick={() => setCardioMode("hiit")}>HIIT</button>
+            </div>
+
+            {cardioMode === "steady" && (
+              <div className="set-grid">
+                <div className="set-grid-row">
+                  <span className="set-label">HR</span>
+                  <input type="number" value={cAvgHr} onChange={e => setCAvgHr(+e.target.value || 0)} className="num-input" />
+                  <span className="unit">bpm avg</span>
+                </div>
+                <div className="set-grid-row">
+                  <span className="set-label">Dur</span>
+                  <input type="number" value={cDur} onChange={e => setCDur(+e.target.value || 0)} className="num-input" />
+                  <span className="unit">min</span>
+                </div>
+                <div style={{fontSize: 11, color: "#888", marginTop: 4}}>
+                  Est: ~{steadyStateBurn(cAvgHr, cDur, userWeightLbs * 0.4536, userAge)} cal
+                </div>
+              </div>
+            )}
+
+            {cardioMode === "hiit" && (
+              <div className="set-grid">
+                <div className="set-grid-header"><span></span><span>HR</span><span>MIN</span></div>
+                <div className="set-grid-row">
+                  <span className="set-label">High</span>
+                  <input type="number" value={cHighHr} onChange={e => setCHighHr(+e.target.value || 0)} className="num-input" />
+                  <input type="number" value={cHighMin} onChange={e => setCHighMin(+e.target.value || 0)} className="num-input" />
+                </div>
+                <div className="set-grid-row">
+                  <span className="set-label">Low</span>
+                  <input type="number" value={cLowHr} onChange={e => setCLowHr(+e.target.value || 0)} className="num-input" />
+                  <input type="number" value={cLowMin} onChange={e => setCLowMin(+e.target.value || 0)} className="num-input" />
+                </div>
+                <div className="set-grid-row">
+                  <span className="set-label">Rnds</span>
+                  <input type="number" value={cRounds} onChange={e => setCRounds(Math.max(1, +e.target.value || 0))} className="num-input" />
+                  <span className="unit">rounds</span>
+                </div>
+                <div className="set-grid-row">
+                  <span className="set-label">W/C</span>
+                  <input type="number" value={cWarmup} onChange={e => setCWarmup(+e.target.value || 0)} className="num-input" placeholder="warm" />
+                  <input type="number" value={cCooldown} onChange={e => setCCooldown(+e.target.value || 0)} className="num-input" placeholder="cool" />
+                </div>
+                <div style={{fontSize: 11, color: "#888", marginTop: 4}}>
+                  Est: ~{hiitBurn([{hr:cHighHr,minutes:cHighMin},{hr:cLowHr,minutes:cLowMin}], cRounds, cWarmup, cCooldown, cLowHr, cLowHr, userWeightLbs*0.4536, userAge)} cal
+                  / {hiitDuration([{hr:cHighHr,minutes:cHighMin},{hr:cLowHr,minutes:cLowMin}], cRounds, cWarmup, cCooldown)} min (+15% EPOC)
+                </div>
+              </div>
+            )}
+
+            <button className="btn full-w" style={{marginTop: 10}} onClick={addCardio}>Log Ride</button>
+          </div>
         </div>
       )}
 
@@ -564,6 +665,15 @@ export default function App() {
             <div className="tdee-row">
               <input type="number" value={tdee} onChange={e => sv("tdee", Math.max(0, +e.target.value || 0), setTdee)} className="num-input lg" />
               <span className="unit">cal/day (exercise adds on top)</span>
+            </div>
+          </div>
+          <div className="setup-tdee">
+            <div className="label">Body stats (for HR calorie formula)</div>
+            <div className="tdee-row">
+              <input type="number" value={userWeightLbs} onChange={e => sv("user_wt", Math.max(50, +e.target.value || 0), setUserWeightLbs)} className="num-input lg" />
+              <span className="unit">lbs</span>
+              <input type="number" value={userAge} onChange={e => sv("user_age", Math.max(10, +e.target.value || 0), setUserAge)} className="num-input" />
+              <span className="unit">age</span>
             </div>
           </div>
 
