@@ -31,9 +31,12 @@ Recommendation: remove package="com.cuttracker.app" from the source AndroidManif
 > Task :app:mergeDebugJniLibFolders
 > Task :app:checkDebugDuplicateClasses
 > Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:mergeLibDexDebug
 > Task :app:processDebugResources FAILED
+> Task :app:validateSigningDebug
 > Task :app:mergeExtDexDebug
-gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1779850077184.json
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1779850238359.json
 
 FAILURE: Build failed with an exception.
 
@@ -247,6 +250,6 @@ ERROR: /home/runner/work/cut-tracker/cut-tracker/android/app/src/main/AndroidMan
 	... 2 more
 
 
-BUILD FAILED in 17s
-23 actionable tasks: 23 executed
+BUILD FAILED in 15s
+25 actionable tasks: 25 executed
 EXIT: 0
